@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VAULT — Portfolio Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:       #070b12;
+  --bg2:      #0d1220;
+  --bg3:      #111827;
+  --bg4:      #1a2335;
+  --border:   rgba(255,255,255,0.06);
+  --border2:  rgba(255,255,255,0.12);
+  --text:     #e8eaf0;
+  --muted:    #6b7a99;
+  --faint:    #2d3a52;
+  --green:    #00d4aa;
+  --gdim:     rgba(0,212,170,0.12);
+  --red:      #ff4d6a;
+  --rdim:     rgba(255,77,106,0.12);
+  --gold:     #f5a623;
+  --blue:     #4a9eff;
+  --btc:      #f7931a;
+  --eth:      #627eea;
+  --sol:      #9945ff;
+  --font-mono:'IBM Plex Mono',monospace;
+  --font-ui:  'Syne',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:var(--font-mono);font-size:13px;min-height:100vh;}
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--green),var(--blue),transparent);z-index:100;}
+body::after{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(255,255,255,0.014) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.014) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+.app{position:relative;z-index:1;max-width:1600px;margin:0 auto;padding:0 24px 40px;}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 0;border-bottom:1px solid var(--border);gap:16px;flex-wrap:wrap;}
+.brand{display:flex;align-items:center;gap:10px;}
+.bmark{width:32px;height:32px;border:1px solid var(--green);border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:var(--font-ui);font-weight:700;font-size:14px;color:var(--green);}
+.bname{font-family:var(--font-ui);font-size:18px;font-weight:700;letter-spacing:0.14em;color:var(--text);}
+.btag{font-size:10px;color:var(--muted);letter-spacing:0.08em;padding:2px 8px;border:1px solid var(--faint);border-radius:3px;}
+.tval{font-size:30px;font-weight:600;letter-spacing:-0.02em;text-align:center;line-height:1;}
+.tpnl{font-size:12px;margin-top:5px;text-align:center;color:var(--muted);}
+.tacts{display:flex;gap:8px;align-items:center;}
+.spill{display:flex;align-items:center;gap:6px;padding:5px 12px;border:1px solid var(--border);border-radius:20px;font-size:11px;color:var(--muted);}
+.sdot{width:6px;height:6px;border-radius:50%;background:var(--muted);transition:background 0.3s;}
+.sdot.live{background:var(--green);box-shadow:0 0 6px var(--green);}
+.sdot.err{background:var(--red);}
+.btn{padding:7px 16px;border-radius:6px;font-family:var(--font-mono);font-size:12px;font-weight:500;cursor:pointer;transition:all 0.15s;letter-spacing:0.04em;border:1px solid var(--border2);background:transparent;color:var(--text);}
+.btn:hover{border-color:var(--green);color:var(--green);}
+.btn-p{background:var(--green);border-color:var(--green);color:#000;font-weight:600;}
+.btn-p:hover{opacity:0.88;color:#000;}
+.btn-sm{padding:4px 10px;font-size:11px;}
+.btn-d{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:13px;transition:color 0.15s;font-family:var(--font-mono);}
+.btn-d:hover{color:var(--red);}
+
+/* TICKER */
+.ticker{display:flex;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;}
+.ticker::-webkit-scrollbar{display:none;}
+.tick{display:flex;align-items:center;gap:8px;padding:9px 20px;border-right:1px solid var(--border);white-space:nowrap;min-width:150px;}
+.tsym{font-family:var(--font-ui);font-size:11px;font-weight:700;letter-spacing:0.08em;}
+.tprice{font-size:13px;}
+.tch{font-size:11px;margin-left:auto;}
+
+/* SUMMARY */
+.summary{display:grid;grid-template-columns:repeat(5,1fr);border-bottom:1px solid var(--border);}
+.scard{padding:14px 18px;border-right:1px solid var(--border);}
+.scard:last-child{border-right:none;}
+.slabel{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;}
+.sval{font-size:19px;font-weight:500;letter-spacing:-0.02em;}
+.ssub{font-size:11px;color:var(--muted);margin-top:3px;}
+
+/* CARDS */
+.section{padding:16px 0 4px;}
+.slbl{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.slbl::after{content:'';flex:1;height:1px;background:var(--border);}
+.agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;}
+.acard{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:15px;border-top:2px solid transparent;transition:border-color 0.2s;}
+.acard:hover{border-color:var(--border2);}
+.acard.btc{border-top-color:var(--btc);}
+.acard.eth{border-top-color:var(--eth);}
+.acard.sol{border-top-color:var(--sol);}
+.acard.stock{border-top-color:var(--green);}
+.acard.other{border-top-color:var(--gold);}
+.csym{font-family:var(--font-ui);font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--muted);margin-bottom:7px;}
+.cprice{font-size:19px;font-weight:500;letter-spacing:-0.01em;margin-bottom:9px;}
+.crow{display:flex;justify-content:space-between;font-size:11px;margin-top:5px;}
+.clbl{color:var(--muted);}
+.pbadge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500;margin-top:8px;}
+.pbadge.g{background:var(--gdim);color:var(--green);}
+.pbadge.r{background:var(--rdim);color:var(--red);}
+.pbadge.n{background:rgba(107,122,153,0.1);color:var(--muted);}
+
+/* MAIN GRID */
+.mgrid{display:grid;grid-template-columns:240px 1fr;gap:12px;margin-top:4px;}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:18px;}
+.ptitle{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:14px;}
+.alloc-legend{display:flex;flex-direction:column;gap:7px;margin-bottom:14px;}
+.arow{display:flex;align-items:center;gap:7px;font-size:12px;}
+.adot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+.asym{color:var(--text);flex:1;}
+.apct{color:var(--muted);}
+
+/* TABLES */
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{text-align:right;padding:0 8px 9px;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:400;border-bottom:1px solid var(--border);white-space:nowrap;}
+th:first-child{text-align:left;padding-left:0;}
+td{text-align:right;padding:10px 8px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;}
+td:first-child{text-align:left;padding-left:0;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,0.018);}
+.apill{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-ui);font-weight:700;font-size:12px;letter-spacing:0.06em;}
+.adott{width:6px;height:6px;border-radius:50%;}
+
+/* MODAL */
+.overlay{position:fixed;inset:0;background:rgba(7,11,18,0.88);backdrop-filter:blur(5px);z-index:200;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.overlay.open{opacity:1;pointer-events:all;}
+.modal{background:var(--bg3);border:1px solid var(--border2);border-radius:14px;padding:26px;width:600px;max-width:95vw;max-height:90vh;overflow-y:auto;transform:translateY(14px);transition:transform 0.2s;}
+.overlay.open .modal{transform:translateY(0);}
+.mhdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;}
+.mtitle{font-family:var(--font-ui);font-size:16px;font-weight:600;}
+.mclose{background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:15px;transition:all 0.15s;}
+.mclose:hover{border-color:var(--red);color:var(--red);}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;}
+.fg{display:flex;flex-direction:column;gap:5px;}
+.fg.full{grid-column:1/-1;}
+.flabel{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);}
+.finput,.fselect{background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:13px;padding:8px 11px;width:100%;transition:border-color 0.15s;outline:none;}
+.finput:focus,.fselect:focus{border-color:var(--green);}
+.finput::placeholder{color:var(--muted);}
+.fselect option{background:var(--bg3);}
+.fcomm{background:var(--bg4);border:1px solid var(--border);border-radius:5px;padding:10px;font-size:11px;color:var(--muted);margin-top:3px;}
+.fcomm span{color:var(--gold);font-weight:500;}
+.fdiv{height:1px;background:var(--border);grid-column:1/-1;}
+.factions{display:flex;gap:10px;justify-content:flex-end;}
+.fmsg{font-size:11px;padding:7px 11px;border-radius:5px;margin-bottom:14px;display:none;}
+.fmsg.ok{background:var(--gdim);color:var(--green);display:block;}
+.fmsg.err{background:var(--rdim);color:var(--red);display:block;}
+
+/* VIEW SWITCH */
+.vswitch{display:flex;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:3px;gap:2px;margin-right:8px;}
+.vbtn{background:transparent;border:none;color:var(--muted);font-family:var(--font-ui);font-size:11px;font-weight:600;letter-spacing:0.1em;padding:6px 14px;border-radius:4px;cursor:pointer;transition:all 0.15s;}
+.vbtn:hover{color:var(--text);}
+.vbtn.active{background:var(--bg4);color:var(--green);}
+.vbtn.active.andres{color:#4a9eff;}
+.vbtn.active.stefania{color:#e879f9;}
+
+/* ACCOUNT CARDS */
+.accgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;}
+.acccard{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;border-left:3px solid var(--blue);transition:border-color 0.2s;}
+.acccard.andres{border-left-color:#4a9eff;}
+.acccard.stefania{border-left-color:#e879f9;}
+.acccard.joint{border-left-color:var(--gold);}
+.acccard.empty{opacity:0.45;border-left-style:dashed;}
+.acclabel{font-family:var(--font-ui);font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--text);}
+.accibkr{font-size:10px;color:var(--muted);margin-top:2px;margin-bottom:11px;font-family:var(--font-mono);}
+.accrow{display:flex;justify-content:space-between;font-size:11px;margin-top:4px;}
+.accrow.bold{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;}
+.acclbl{color:var(--muted);}
+.accpill{display:inline-block;font-size:9px;padding:2px 6px;border-radius:3px;background:rgba(245,166,35,0.15);color:var(--gold);letter-spacing:0.05em;margin-left:5px;text-transform:uppercase;}
+
+.sync-badge{font-size:10px;padding:4px 10px;border-radius:4px;letter-spacing:0.06em;transition:all 0.3s;}
+.sync-badge.ok{color:var(--green);background:var(--gdim);}
+.sync-badge.err{color:var(--red);background:var(--rdim);}
+.sync-badge.loading{color:var(--gold);background:rgba(245,166,35,0.12);}
+
+/* UTIL */
+.green{color:var(--green);}
+.red{color:var(--red);}
+.gold{color:var(--gold);}
+.muted{color:var(--muted);}
+.empty{text-align:center;padding:28px;color:var(--muted);font-size:12px;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--faint);border-radius:2px;}
+@media(max-width:860px){.mgrid{grid-template-columns:1fr;}.summary{grid-template-columns:repeat(2,1fr);}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="brand">
+    <div class="bmark">V</div>
+    <span class="bname">VAULT</span>
+    <span class="btag">Portfolio</span>
+  </div>
+  <div>
+    <div class="tval" id="total-val">—</div>
+    <div class="tpnl" id="total-pnl">Connecting...</div>
+  </div>
+  <div class="tacts">
+    <div class="vswitch" id="vswitch">
+      <button class="vbtn active" data-view="ALL" onclick="setView('ALL')">ALL</button>
+      <button class="vbtn" data-view="ANDRES" onclick="setView('ANDRES')">ANDRÉS</button>
+      <button class="vbtn" data-view="STEFANIA" onclick="setView('STEFANIA')">STEFANIA</button>
+    </div>
+    <div class="spill"><span class="sdot" id="s-dot"></span><span id="s-text">Initializing...</span></div>
+    <span class="sync-badge loading" id="sync-status">↻ Syncing...</span>
+    <button class="btn" id="cur-btn" onclick="toggleCurrency()">USD</button>
+    <button class="btn btn-p" onclick="openModal()">+ Purchase</button>
+  </div>
+</div>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="tick"><span class="tsym" style="color:var(--btc)">BTC</span><span class="tprice" id="tk-BTC">—</span><span class="tch muted" id="tc-BTC">—</span></div>
+  <div class="tick"><span class="tsym" style="color:var(--eth)">ETH</span><span class="tprice" id="tk-ETH">—</span><span class="tch muted" id="tc-ETH">—</span></div>
+  <div class="tick"><span class="tsym" style="color:var(--sol)">SOL</span><span class="tprice" id="tk-SOL">—</span><span class="tch muted" id="tc-SOL">—</span></div>
+  <div class="tick" style="margin-left:auto;border-right:none;min-width:auto;gap:16px;">
+    <span class="muted" style="font-size:10px;">USD/CAD</span>
+    <span id="tk-rate">—</span>
+    <span class="muted" id="tk-time" style="font-size:11px;">—</span>
+  </div>
+</div>
+
+<!-- SUMMARY -->
+<div class="summary">
+  <div class="scard"><div class="slabel">Total invested</div><div class="sval" id="s-inv">—</div><div class="ssub" id="s-inv2">—</div></div>
+  <div class="scard"><div class="slabel">Current value</div><div class="sval" id="s-val">—</div><div class="ssub" id="s-val2">—</div></div>
+  <div class="scard"><div class="slabel">Total P&L</div><div class="sval" id="s-pnl">—</div><div class="ssub" id="s-pnl2">—</div></div>
+  <div class="scard"><div class="slabel">Commissions paid</div><div class="sval gold" id="s-comm">CA$0.00</div><div class="ssub">Tax record</div></div>
+  <div class="scard"><div class="slabel">Transactions</div><div class="sval" id="s-tx">0</div><div class="ssub" id="s-assets">0 assets</div></div>
+</div>
+
+<!-- ACCOUNTS PERFORMANCE -->
+<div class="section" id="accounts-section">
+  <div class="slbl">Accounts Performance</div>
+  <div class="accgrid" id="accgrid"></div>
+</div>
+
+<!-- HOLDINGS -->
+<div class="section">
+  <div class="slbl">Holdings</div>
+  <div class="agrid" id="agrid"></div>
+</div>
+
+<!-- MAIN GRID -->
+<div class="mgrid">
+  <div class="panel">
+    <div class="ptitle">Allocation</div>
+    <div class="alloc-legend" id="alloc-legend"><div class="muted" style="font-size:11px;">No holdings yet</div></div>
+    <div style="position:relative;height:175px;"><canvas id="allocChart" role="img" aria-label="Allocation donut chart"></canvas></div>
+  </div>
+  <div class="panel">
+    <div class="ptitle">DCA Tracker — Price average & P&L per asset</div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr>
+          <th>Asset</th><th>Units</th><th>Avg buy USD</th><th>Avg buy CAD</th><th>Current</th><th>Invested</th><th>Value</th><th>Commissions</th><th>P&L</th>
+        </tr></thead>
+        <tbody id="dca-tbody"><tr><td colspan="8"><div class="empty">Add your first purchase to begin tracking</div></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY -->
+<div class="panel" style="margin-top:12px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <div class="ptitle" style="margin-bottom:0;">Transaction History — Tax Record</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span class="muted" style="font-size:11px;" id="tx-count">0 entries</span>
+      <button class="btn btn-sm" onclick="exportCSV()">Export CSV</button>
+    </div>
+  </div>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead><tr>
+        <th>Date</th><th>Account</th><th>Asset</th><th>Class</th><th>Units</th><th>Price USD</th><th>Amount CAD</th><th>Commission</th><th>Comm %</th><th>Exchange</th><th>Net USD</th><th>Notes</th><th></th>
+      </tr></thead>
+      <tbody id="tx-tbody"><tr><td colspan="13"><div class="empty">No transactions recorded</div></td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<!-- MODAL -->
+<div class="overlay" id="overlay" onclick="closeOut(event)">
+  <div class="modal">
+    <div class="mhdr">
+      <div class="mtitle">Register Purchase</div>
+      <button class="mclose" onclick="closeModal()">✕</button>
+    </div>
+    <div class="fmsg" id="fmsg"></div>
+    <div class="fgrid">
+      <div class="fg">
+        <label class="flabel">Asset class</label>
+        <select class="fselect" id="f-type" onchange="handleType()">
+          <option value="crypto">Crypto</option>
+          <option value="stock">Stock / Equity</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="flabel">Asset</label>
+        <select class="fselect" id="f-asset" onchange="onAsset()">
+          <option value="BTC">Bitcoin (BTC)</option>
+          <option value="ETH">Ethereum (ETH)</option>
+          <option value="SOL">Solana (SOL)</option>
+          <option value="custom">Other...</option>
+        </select>
+      </div>
+      <div class="fg" id="f-cw" style="display:none;">
+        <label class="flabel">Symbol / Ticker</label>
+        <input class="finput" id="f-sym" type="text" placeholder="e.g. TSLA" style="text-transform:uppercase;">
+      </div>
+      <div class="fg">
+        <label class="flabel">Date</label>
+        <input class="finput" id="f-date" type="date">
+      </div>
+      <div class="fg">
+        <label class="flabel">Amount paid (CAD)</label>
+        <input class="finput" id="f-cad" type="number" placeholder="100.00" step="0.01" min="0" oninput="calcComm()">
+      </div>
+      <div class="fg">
+        <label class="flabel">Price at purchase <span id="price-cur-lbl" style="color:var(--green);cursor:pointer;" onclick="togglePriceCur()">USD ⇄</span></label>
+        <input class="finput" id="f-price" type="number" placeholder="Price per unit" step="0.0001" min="0" oninput="calcPriceConv()">
+        <div class="fcomm" id="f-price-conv" style="display:none;">—</div>
+      </div>
+      <div class="fdiv"></div>
+      <div class="fg">
+        <label class="flabel">Commission paid (CAD)</label>
+        <input class="finput" id="f-comm" type="number" placeholder="0.00" step="0.01" min="0" oninput="calcComm()">
+        <div class="fcomm" id="f-comm-calc">Enter amount + commission to see % breakdown</div>
+      </div>
+      <div class="fg">
+        <label class="flabel">Account</label>
+        <select class="fselect" id="f-account">
+          <option value="FHSA-AND">FHSA — Andrés (U25929586)</option>
+          <option value="IND-AND">Individual — Andrés (U25929587)</option>
+          <option value="TFSA-AND">TFSA — Andrés (pending)</option>
+          <option value="FHSA-STE">FHSA — Stefania (U25942422)</option>
+          <option value="IND-STE">Individual — Stefania (U25942423)</option>
+          <option value="TFSA-STE">TFSA — Stefania (pending)</option>
+          <option value="CRYPTO">Crypto — NDAX (joint)</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="flabel">Exchange / Broker</label>
+        <select class="fselect" id="f-exch">
+          <option value="NDAX">NDAX</option>
+          <option value="Binance CA">Binance CA</option>
+          <option value="Kraken">Kraken</option>
+          <option value="Coinbase">Coinbase</option>
+          <option value="Newton">Newton</option>
+          <option value="Interactive Brokers">Interactive Brokers</option>
+          <option value="Questrade">Questrade</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="fg full">
+        <label class="flabel">Notes (optional)</label>
+        <input class="finput" id="f-notes" type="text" placeholder="e.g. DCA entry #1 — monthly purchase">
+      </div>
+    </div>
+    <div class="factions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-p" onclick="addPurchase()">Record purchase</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ──
+const FINNHUB_KEY   = 'd87jj49r01qmhakg2jeg';
+const SHEET_ID      = '1C0fskBtEOshTfI32IO8QVLRs8lVoErhPPposbPZ0798';
+const SCRIPT_URL    = 'https://script.google.com/macros/s/AKfycbzb7wi00D89SadBNexFdeKKQaTnAlKdjb3ymJqNeUo7K1dC1zSdH76OIsVX8gwaFRl2Hg/exec'; // Set after Apps Script deployment
+
+// ── STATE ──
+let currency   = 'USD';
+let viewMode   = 'ALL';
+let usdToCad   = 1.38;
+let prices     = { BTC:0, ETH:0, SOL:0 };
+let prevPrices = { BTC:0, ETH:0, SOL:0 };
+let stockPrices= {};
+let transactions = [];
+let allocChart = null;
+let ws = null;
+let stockInterval = null;
+
+const COLORS  = { BTC:'#f7931a', ETH:'#627eea', SOL:'#9945ff' };
+const PALETTE = ['#00d4aa','#4a9eff','#f5a623','#ff4d6a','#a78bfa','#34d399','#fb923c','#e879f9'];
+
+const ACCOUNTS = {
+  'FHSA-AND': { label:'FHSA — Andrés',       short:'FHSA-A', holder:'ANDRES',   ibkr:'U25929586', pending:false },
+  'IND-AND':  { label:'Individual — Andrés', short:'IND-A',  holder:'ANDRES',   ibkr:'U25929587', pending:false },
+  'TFSA-AND': { label:'TFSA — Andrés',       short:'TFSA-A', holder:'ANDRES',   ibkr:null,        pending:true  },
+  'FHSA-STE': { label:'FHSA — Stefania',     short:'FHSA-S', holder:'STEFANIA', ibkr:'U25942422', pending:false },
+  'IND-STE':  { label:'Individual — Stefania', short:'IND-S', holder:'STEFANIA', ibkr:'U25942423', pending:false },
+  'TFSA-STE': { label:'TFSA — Stefania',     short:'TFSA-S', holder:'STEFANIA', ibkr:null,        pending:true  },
+  'CRYPTO':   { label:'Crypto — NDAX',       short:'CRYPTO', holder:'JOINT',    ibkr:null,        pending:false }
+};
+
+// ── STORAGE ──
+function loadLocal() {
+  try {
+    const d = JSON.parse(localStorage.getItem('vault-v2') || '{}');
+    transactions = d.transactions || [];
+    currency     = d.currency     || 'USD';
+    viewMode     = d.viewMode     || 'ALL';
+  } catch(e){}
+}
+function saveLocal() {
+  try { localStorage.setItem('vault-v2', JSON.stringify({ transactions, currency, viewMode })); } catch(e){}
+}
+
+// ── GOOGLE SHEETS SYNC ──────────────────────────────────────
+async function syncToSheets(tx) {
+  if (!SCRIPT_URL) return;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const r = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'addTransaction', tx })
+      });
+      const d = await r.json();
+      if (d.ok || d.duplicate) {
+        setSyncStatus('ok');
+        return;
+      }
+    } catch(e) {
+      if (attempt === 3) setSyncStatus('err');
+      else await sleep(1000 * attempt);
+    }
+  }
+}
+
+async function deleteFromSheets(id) {
+  if (!SCRIPT_URL || !id) return;
+  try {
+    await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'deleteTransaction', id: String(id) })
+    });
+  } catch(e) { console.warn('Delete from Sheets failed:', e); }
+}
+
+async function loadFromSheets() {
+  if (!SCRIPT_URL) return;
+  setSyncStatus('loading');
+  try {
+    const r = await fetch(SCRIPT_URL + '?action=getTransactions');
+    const d = await r.json();
+    if (d.transactions && d.transactions.length > 0) {
+      // Merge: Sheets es source of truth si tiene más datos
+      if (d.transactions.length >= transactions.length) {
+        transactions = d.transactions;
+        saveLocal();
+        renderAll();
+      }
+    }
+    setSyncStatus('ok');
+  } catch(e) {
+    setSyncStatus('err');
+    console.warn('Load from Sheets failed:', e);
+  }
+}
+
+function setSyncStatus(state) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  const icons = { ok: '☁ Synced', err: '⚠ Sync error', loading: '↻ Syncing...' };
+  el.textContent = icons[state] || '';
+  el.className   = 'sync-badge ' + state;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── EXCHANGE RATE ──
+async function fetchRate() {
+  try {
+    const r = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+    const d = await r.json();
+    usdToCad = d.rates.CAD || 1.38;
+    document.getElementById('tk-rate').textContent = usdToCad.toFixed(4);
+  } catch(e) {
+    document.getElementById('tk-rate').textContent = usdToCad.toFixed(4) + '*';
+  }
+}
+
+// ── BINANCE WEBSOCKET ──
+function connectBinance() {
+  try {
+    ws = new WebSocket('wss://stream.binance.com:9443/stream?streams=btcusdt@miniTicker/ethusdt@miniTicker/solusdt@miniTicker');
+    ws.onopen  = () => setStatus('live','Live — Binance WebSocket');
+    ws.onmessage = (e) => {
+      const m = JSON.parse(e.data);
+      if (!m.data) return;
+      prevPrices = {...prices};
+      const s = m.stream;
+      if      (s.includes('btc')) prices.BTC = parseFloat(m.data.c);
+      else if (s.includes('eth')) prices.ETH = parseFloat(m.data.c);
+      else if (s.includes('sol')) prices.SOL = parseFloat(m.data.c);
+      document.getElementById('tk-time').textContent = new Date().toLocaleTimeString();
+      renderTicker();
+      renderAll();
+    };
+    ws.onerror = () => setStatus('err','Connection error');
+    ws.onclose = () => { setStatus('off','Reconnecting...'); setTimeout(connectBinance,5000); };
+  } catch(e) { setStatus('err','WebSocket unavailable'); }
+}
+
+// ── FINNHUB STOCK PRICES ──
+async function fetchStockPrices() {
+  const syms = [...new Set(transactions.filter(t => t.type === 'stock').map(t => t.symbol))];
+  if (!syms.length) return;
+  for (const sym of syms) {
+    try {
+      const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${sym}&token=${FINNHUB_KEY}`);
+      const d = await r.json();
+      if (d.c && d.c > 0) stockPrices[sym] = { price: d.c, change: d.dp || 0 };
+    } catch(e){}
+  }
+  renderAll();
+}
+
+function startStockPolling() {
+  fetchStockPrices();
+  if (stockInterval) clearInterval(stockInterval);
+  stockInterval = setInterval(fetchStockPrices, 30000);
+}
+
+// ── HELPERS ──
+function setStatus(state, txt) {
+  const dot = document.getElementById('s-dot');
+  const t   = document.getElementById('s-text');
+  if (t) t.textContent = txt;
+  if (dot) dot.className = 'sdot' + (state==='live'?' live':state==='err'?' err':'');
+}
+
+function getPrice(sym) {
+  if (prices[sym] > 0) return prices[sym];
+  if (stockPrices[sym]) return stockPrices[sym].price;
+  const txs = transactions.filter(t => t.symbol === sym);
+  return txs.length ? txs[txs.length-1].priceUsd : 0;
+}
+
+function getChange(sym) {
+  if (stockPrices[sym]) return stockPrices[sym].change;
+  return null;
+}
+
+function fmt(v, d=2) {
+  const val = currency==='CAD' ? v*usdToCad : v;
+  const s   = currency==='CAD' ? 'CA$' : '$';
+  return s + val.toLocaleString('en-CA',{minimumFractionDigits:d,maximumFractionDigits:d});
+}
+function fmtUSD(v,d=2){ return '$'+v.toLocaleString('en',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function fmtCAD(v,d=2){ return 'CA$'+v.toLocaleString('en',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function fmtPct(p){ return (p>=0?'+':'')+p.toFixed(2)+'%'; }
+function pnlCls(v){ return v>=0?'green':'red'; }
+function colorFor(sym,i){ return COLORS[sym]||PALETTE[i%PALETTE.length]; }
+function badge(v,pct){
+  const c=v>=0?'g':'r', sg=v>=0?'+':'';
+  return `<span class="pbadge ${c}">${sg}${fmt(v)} (${fmtPct(pct)})</span>`;
+}
+
+// ── VIEW FILTER ──
+function setView(mode){
+  viewMode = mode;
+  saveLocal();
+  document.querySelectorAll('.vbtn').forEach(b=>{
+    const isActive = b.dataset.view === mode;
+    b.className = 'vbtn' + (isActive ? ' active' : '') +
+      (isActive && mode==='ANDRES' ? ' andres' : '') +
+      (isActive && mode==='STEFANIA' ? ' stefania' : '');
+  });
+  renderAll();
+}
+
+function filteredTx(){
+  if (viewMode === 'ALL') return transactions;
+  return transactions.filter(t => {
+    const acc = ACCOUNTS[t.account];
+    if (!acc) return false;
+    return acc.holder === viewMode;
+  });
+}
+
+// ── PORTFOLIO CALC ──
+function calc() {
+  const txs = filteredTx();
+  const assets={};
+  txs.forEach(tx=>{
+    if (!assets[tx.symbol]) assets[tx.symbol]={symbol:tx.symbol,type:tx.type,units:0,costUsd:0,cadInvested:0,commCad:0};
+    const a=assets[tx.symbol];
+    a.units      +=tx.units;
+    a.costUsd    +=tx.units*tx.priceUsd;
+    a.cadInvested+=tx.cadAmount;
+    a.commCad    +=(tx.commissionCad||0);
+  });
+  let totalVal=0,totalCost=0,totalComm=0;
+  Object.values(assets).forEach(a=>{
+    a.avgPrice=a.units>0?a.costUsd/a.units:0;
+    a.price=getPrice(a.symbol);
+    a.value=a.units*a.price;
+    a.pnl=a.value-a.costUsd;
+    a.pnlPct=a.costUsd>0?(a.pnl/a.costUsd)*100:0;
+    totalVal+=a.value; totalCost+=a.costUsd; totalComm+=a.commCad;
+  });
+  return {assets,totalVal,totalCost,totalPnl:totalVal-totalCost,totalComm,totalCommUsd:totalComm/usdToCad};
+}
+
+// ── ACCOUNTS CALC ──
+function calcAccounts(){
+  // Calcula performance por cuenta SOBRE EL SET filtrado por viewMode
+  const txs = filteredTx();
+  const accs = {};
+  txs.forEach(tx=>{
+    const key = tx.account || 'UNASSIGNED';
+    if (!accs[key]) accs[key]={key,units:{},costUsd:0,cadInvested:0,commCad:0,txCount:0};
+    const a = accs[key];
+    if (!a.units[tx.symbol]) a.units[tx.symbol]={units:0,costUsd:0,type:tx.type};
+    a.units[tx.symbol].units   += tx.units;
+    a.units[tx.symbol].costUsd += tx.units*tx.priceUsd;
+    a.costUsd     += tx.units*tx.priceUsd;
+    a.cadInvested += tx.cadAmount;
+    a.commCad     += (tx.commissionCad||0);
+    a.txCount     += 1;
+  });
+  Object.values(accs).forEach(a=>{
+    a.valueUsd = 0;
+    Object.entries(a.units).forEach(([sym,u])=>{
+      a.valueUsd += u.units * getPrice(sym);
+    });
+    a.pnlUsd = a.valueUsd - a.costUsd;
+    a.pnlPct = a.costUsd>0 ? (a.pnlUsd/a.costUsd)*100 : 0;
+  });
+  return accs;
+}
+
+// ── RENDER ──
+function renderAll(){
+  const s=calc();
+  renderHeader(s); renderSummary(s); renderCards(s);
+  renderAccounts();
+  renderDCA(s); renderAlloc(s); renderTx();
+  document.getElementById('cur-btn').textContent=currency;
+}
+
+function renderAccounts(){
+  const grid = document.getElementById('accgrid');
+  const accs = calcAccounts();
+  // Lista de cuentas a mostrar según viewMode
+  const visibleKeys = Object.keys(ACCOUNTS).filter(k=>{
+    const meta = ACCOUNTS[k];
+    if (viewMode === 'ALL') return true;
+    if (viewMode === 'ANDRES')   return meta.holder === 'ANDRES';
+    if (viewMode === 'STEFANIA') return meta.holder === 'STEFANIA';
+    return true;
+  });
+  if (!visibleKeys.length){
+    grid.innerHTML = '<div class="empty">No accounts in this view</div>';
+    return;
+  }
+  grid.innerHTML = visibleKeys.map(k=>{
+    const meta = ACCOUNTS[k];
+    const a = accs[k];
+    const holderCls = meta.holder.toLowerCase();
+    const hasData = a && a.txCount > 0;
+    const pendingPill = meta.pending ? '<span class="accpill">Pending</span>' : '';
+    if (!hasData){
+      return `<div class="acccard ${holderCls} empty">
+        <div class="acclabel">${meta.label}${pendingPill}</div>
+        <div class="accibkr">${meta.ibkr || (meta.pending ? 'Account not opened yet' : '—')}</div>
+        <div class="accrow"><span class="acclbl">No transactions</span><span class="muted">—</span></div>
+      </div>`;
+    }
+    const pnlCol = a.pnlUsd >= 0 ? 'var(--green)' : 'var(--red)';
+    const sg = a.pnlUsd >= 0 ? '+' : '';
+    return `<div class="acccard ${holderCls}">
+      <div class="acclabel">${meta.label}</div>
+      <div class="accibkr">${meta.ibkr || 'No IBKR ID'} · ${a.txCount} tx</div>
+      <div class="accrow"><span class="acclbl">Invested</span><span>${fmtCAD(a.cadInvested)}</span></div>
+      <div class="accrow"><span class="acclbl">Current value</span><span>${fmtCAD(a.valueUsd*usdToCad)}</span></div>
+      <div class="accrow bold"><span class="acclbl">P&L</span><span style="color:${pnlCol};">${sg}${fmtCAD(a.pnlUsd*usdToCad)} (${sg}${a.pnlPct.toFixed(2)}%)</span></div>
+    </div>`;
+  }).join('');
+}
+
+function renderTicker(){
+  ['BTC','ETH','SOL'].forEach(sym=>{
+    const el=document.getElementById('tk-'+sym);
+    const ce=document.getElementById('tc-'+sym);
+    if(el && prices[sym]>0) el.textContent='$'+prices[sym].toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+    if(ce && prevPrices[sym]>0){
+      const chg=prices[sym]-prevPrices[sym];
+      const pct=((chg/prevPrices[sym])*100).toFixed(3);
+      ce.textContent=(chg>=0?'+':'')+pct+'%';
+      ce.className='tch '+(chg>=0?'green':'red');
+    }
+  });
+}
+
+function renderHeader(s){
+  const tv=document.getElementById('total-val');
+  const tp=document.getElementById('total-pnl');
+  if(!transactions.length){tv.textContent='—';tp.textContent='Add your first purchase to start tracking';tp.style.color='var(--muted)';return;}
+  tv.textContent=fmt(s.totalVal);
+  const pct=s.totalCost>0?(s.totalPnl/s.totalCost)*100:0;
+  const c=s.totalPnl>=0?'var(--green)':'var(--red)';
+  tp.innerHTML=`<span style="color:${c}">${s.totalPnl>=0?'+':''}${fmt(s.totalPnl)} (${fmtPct(pct)})</span> total P&L`;
+}
+
+function renderSummary(s){
+  const pct=s.totalCost>0?(s.totalPnl/s.totalCost)*100:0;
+  const c=s.totalPnl>=0?'var(--green)':'var(--red)';
+  const assets=Object.values(s.assets);
+  el('s-inv',fmt(s.totalCost)); el('s-inv2',fmtCAD(s.totalCost*usdToCad));
+  el('s-val',fmt(s.totalVal)); el('s-val2',fmtCAD(s.totalVal*usdToCad));
+  document.getElementById('s-pnl').innerHTML=`<span style="color:${c}">${s.totalPnl>=0?'+':''}${fmt(s.totalPnl)}</span>`;
+  document.getElementById('s-pnl2').innerHTML=`<span style="color:${c}">${fmtPct(pct)}</span>`;
+  el('s-comm',fmtCAD(s.totalComm));
+  el('s-tx',transactions.length);
+  el('s-assets',assets.length+' asset'+(assets.length!==1?'s':''));
+  el('tx-count',transactions.length+' entries');
+}
+
+function el(id,txt){const e=document.getElementById(id);if(e)e.textContent=txt;}
+
+function renderCards(s){
+  const grid=document.getElementById('agrid');
+  const base=['BTC','ETH','SOL'];
+  const extras=Object.keys(s.assets).filter(sym=>!base.includes(sym));
+  const all=[...base,...extras];
+  grid.innerHTML=all.map((sym,i)=>{
+    const a=s.assets[sym];
+    const price=getPrice(sym);
+    const chg=getChange(sym);
+    const color=colorFor(sym,i);
+    const cls=sym==='BTC'?'btc':sym==='ETH'?'eth':sym==='SOL'?'sol':a&&a.type==='stock'?'stock':'other';
+    const hasH=a&&a.units>0;
+    const pstr=price>0?'$'+price.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}):(base.includes(sym)?'Loading...':'Manual');
+    const chgHtml=chg!==null?`<span class="${chg>=0?'green':'red'}" style="font-size:11px;">${chg>=0?'+':''}${chg.toFixed(2)}%</span>`:'';
+    const us=a?(a.units<1?a.units.toFixed(6):a.units.toFixed(4)):'';
+    return `<div class="acard ${cls}">
+      <div class="csym" style="display:flex;justify-content:space-between;">${sym}${chgHtml}</div>
+      <div class="cprice">${pstr}</div>
+      ${hasH?`<div class="crow"><span class="clbl">Units</span><span>${us}</span></div>
+      <div class="crow"><span class="clbl">Value</span><span>${fmt(a.value)}</span></div>
+      <div>${a.price>0?badge(a.pnl,a.pnlPct):'<span class="pbadge n">—</span>'}</div>`
+      :`<div class="crow"><span class="clbl" style="color:var(--faint)">Not in portfolio</span></div>`}
+    </div>`;
+  }).join('');
+}
+
+function renderDCA(s){
+  const tbody=document.getElementById('dca-tbody');
+  const assets=Object.values(s.assets);
+  if(!assets.length){tbody.innerHTML='<tr><td colspan="9"><div class="empty">No assets tracked yet — add your first purchase</div></td></tr>';return;}
+  tbody.innerHTML=assets.map((a,i)=>{
+    const c=a.pnlPct>=0?'green':'red';
+    const sg=a.pnlPct>=0?'+':'';
+    const us=a.units<1?a.units.toFixed(6):a.units.toFixed(4);
+    const hasP=a.price>0;
+    const avgCad=a.avgPrice*usdToCad;
+    return `<tr>
+      <td><span class="apill"><span class="adott" style="background:${colorFor(a.symbol,i)}"></span>${a.symbol}</span></td>
+      <td>${us}</td><td>${fmtUSD(a.avgPrice)}</td>
+      <td class="muted">${fmtCAD(avgCad)}</td>
+      <td>${hasP?fmtUSD(a.price):'<span class="muted">—</span>'}</td>
+      <td>${fmt(a.costUsd)}</td>
+      <td>${hasP?fmt(a.value):'<span class="muted">—</span>'}</td>
+      <td class="gold">${fmtCAD(a.commCad)}</td>
+      <td>${hasP?`<span class="${c}">${sg}${fmt(a.pnl)}<br><small>${sg}${a.pnlPct.toFixed(2)}%</small></span>`:'<span class="muted">—</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAlloc(s){
+  const assets=Object.values(s.assets).filter(a=>a.value>0);
+  const legend=document.getElementById('alloc-legend');
+  if(!assets.length){legend.innerHTML='<div class="muted" style="font-size:11px;">No holdings yet</div>';if(allocChart){allocChart.destroy();allocChart=null;}return;}
+  const total=assets.reduce((acc,a)=>acc+a.value,0);
+  const colors=assets.map((a,i)=>colorFor(a.symbol,i));
+  legend.innerHTML=assets.map((a,i)=>`<div class="arow"><span class="adot" style="background:${colors[i]}"></span><span class="asym">${a.symbol}</span><span class="apct">${((a.value/total)*100).toFixed(1)}%</span></div>`).join('');
+  const ctx=document.getElementById('allocChart');
+  if(allocChart)allocChart.destroy();
+  var chartData = {
+    labels: assets.map(function(a){ return a.symbol; }),
+    datasets: [{
+      data: assets.map(function(a){ return a.value; }),
+      backgroundColor: colors,
+      borderWidth: 0,
+      hoverOffset: 5
+    }]
+  };
+  var chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '70%',
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#111827',
+        borderColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1,
+        bodyColor: '#e8eaf0',
+        titleColor: '#6b7a99',
+        callbacks: {
+          label: function(c) {
+            var p = ((c.parsed / total) * 100).toFixed(1);
+            return ' ' + c.label + ': ' + fmt(c.parsed) + ' (' + p + '%)';
+          }
+        }
+      }
+    }
+  };
+  allocChart = new Chart(ctx, { type: 'doughnut', data: chartData, options: chartOptions });
+}
+
+function renderTx(){
+  const tbody=document.getElementById('tx-tbody');
+  const txs = filteredTx();
+  if(!txs.length){tbody.innerHTML='<tr><td colspan="13"><div class="empty">No transactions recorded</div></td></tr>';return;}
+  // mapeo de cada tx visible al idx real para borrado correcto
+  const indexed = txs.map(tx => ({tx, idx: transactions.indexOf(tx)}));
+  tbody.innerHTML=[...indexed].reverse().map(({tx,idx})=>{
+    const us=tx.units<1?tx.units.toFixed(6):tx.units.toFixed(4);
+    const cp=tx.cadAmount>0?((tx.commissionCad/tx.cadAmount)*100).toFixed(3):'0.000';
+    const netUsd=((tx.cadAmount-(tx.commissionCad||0))/usdToCad).toFixed(2);
+    const accMeta = ACCOUNTS[tx.account];
+    const accLabel = accMeta ? accMeta.short : '<span class="muted">—</span>';
+    const accCls = accMeta ? accMeta.holder.toLowerCase() : '';
+    const accColor = accCls==='andres' ? '#4a9eff' : accCls==='stefania' ? '#e879f9' : accCls==='joint' ? 'var(--gold)' : 'var(--muted)';
+    return `<tr>
+      <td>${tx.date}</td>
+      <td><span style="color:${accColor};font-family:var(--font-ui);font-weight:600;font-size:11px;letter-spacing:0.05em;">${accLabel}</span></td>
+      <td><strong>${tx.symbol}</strong></td>
+      <td class="muted">${tx.type==='crypto'?'Crypto':'Equity'}</td>
+      <td>${us}</td>
+      <td>${fmtUSD(tx.priceUsd)}</td>
+      <td>${fmtCAD(tx.cadAmount)}</td>
+      <td class="gold">${fmtCAD(tx.commissionCad||0)}</td>
+      <td class="gold">${cp}%</td>
+      <td class="muted">${tx.exchange||'—'}</td>
+      <td>${fmtUSD(parseFloat(netUsd))}</td>
+      <td class="muted" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;">${tx.notes||'—'}</td>
+      <td><button class="btn-d" onclick="delTx(${idx})" title="Delete">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── MODAL ──
+function openModal(){
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('f-date').value=new Date().toISOString().split('T')[0];
+  onAsset();
+}
+function closeModal(){document.getElementById('overlay').classList.remove('open');clearMsg();}
+function closeOut(e){if(e.target===document.getElementById('overlay'))closeModal();}
+
+// ── FORM ──
+function handleType(){
+  const type=document.getElementById('f-type').value;
+  const sel=document.getElementById('f-asset');
+  if(type==='crypto'){
+    sel.innerHTML='<option value="BTC">Bitcoin (BTC)</option><option value="ETH">Ethereum (ETH)</option><option value="SOL">Solana (SOL)</option><option value="custom">Other crypto...</option>';
+  } else {
+    sel.innerHTML='<option value="TSLA">Tesla (TSLA)</option><option value="PLTR">Palantir (PLTR)</option><option value="NVDA">NVIDIA (NVDA)</option><option value="MSFT">Microsoft (MSFT)</option><option value="AAPL">Apple (AAPL)</option><option value="custom">Other...</option>';
+  }
+  onAsset();
+}
+
+function onAsset(){
+  const val=document.getElementById('f-asset').value;
+  document.getElementById('f-cw').style.display=val==='custom'?'flex':'none';
+  const pi=document.getElementById('f-price');
+  if(val!=='custom'&&prices[val]>0){pi.value=prices[val].toFixed(2);}
+  else if(val!=='custom'&&stockPrices[val]){pi.value=stockPrices[val].price.toFixed(2);}
+  else{pi.value='';pi.placeholder='Price per unit';}
+  calcPriceConv();
+}
+
+// ── PRICE CURRENCY TOGGLE ──
+let priceCur = 'USD'; // moneda en la que el usuario ingresa el precio
+function togglePriceCur(){
+  priceCur = priceCur === 'USD' ? 'CAD' : 'USD';
+  const lbl = document.getElementById('price-cur-lbl');
+  lbl.textContent = priceCur + ' ⇄';
+  lbl.style.color = priceCur === 'CAD' ? 'var(--blue)' : 'var(--green)';
+  calcPriceConv();
+}
+
+function calcPriceConv(){
+  const raw = parseFloat(document.getElementById('f-price').value);
+  const el  = document.getElementById('f-price-conv');
+  if(!raw || raw<=0){ el.style.display='none'; return; }
+  el.style.display='block';
+  if(priceCur === 'CAD'){
+    const usd = raw / usdToCad;
+    el.innerHTML = `CAD $${raw.toFixed(4)} = <span>USD $${usd.toFixed(4)}</span> @ rate ${usdToCad.toFixed(4)}`;
+  } else {
+    const cad = raw * usdToCad;
+    el.innerHTML = `USD $${raw.toFixed(4)} = <span>CAD $${cad.toFixed(4)}</span> @ rate ${usdToCad.toFixed(4)}`;
+  }
+}
+
+function calcComm(){
+  const cad=parseFloat(document.getElementById('f-cad').value)||0;
+  const comm=parseFloat(document.getElementById('f-comm').value)||0;
+  const el=document.getElementById('f-comm-calc');
+  if(cad>0&&comm>=0){
+    const pct=((comm/cad)*100).toFixed(3);
+    const net=(cad-comm).toFixed(2);
+    el.innerHTML=`Commission: <span>${pct}%</span> of purchase — Net invested: <span>CA$${net}</span>`;
+  } else {
+    el.textContent='Enter amount + commission to see % breakdown';
+  }
+}
+
+async function addPurchase(){
+  const type=document.getElementById('f-type').value;
+  const selVal=document.getElementById('f-asset').value;
+  const customSym=document.getElementById('f-sym').value.trim().toUpperCase();
+  const symbol=selVal==='custom'?customSym:selVal;
+  const date=document.getElementById('f-date').value;
+  const cadAmount=parseFloat(document.getElementById('f-cad').value);
+  let priceInput=parseFloat(document.getElementById('f-price').value);
+  const commCad=parseFloat(document.getElementById('f-comm').value)||0;
+  const account=document.getElementById('f-account').value;
+  const exchange=document.getElementById('f-exch').value;
+  const notes=document.getElementById('f-notes').value.trim();
+
+  if(!symbol){showMsg('Enter an asset symbol',true);return;}
+  if(!date){showMsg('Select a date',true);return;}
+  if(!cadAmount||cadAmount<=0){showMsg('Enter a valid CAD amount',true);return;}
+  if(!account){showMsg('Select an account',true);return;}
+
+  // Convertir el precio a USD si fue ingresado en CAD (el motor trabaja en USD)
+  let priceUsd, priceCad;
+  if(priceInput && priceInput>0){
+    if(priceCur === 'CAD'){
+      priceCad = priceInput;
+      priceUsd = priceInput / usdToCad;
+    } else {
+      priceUsd = priceInput;
+      priceCad = priceInput * usdToCad;
+    }
+  } else {
+    // fallback a precio de mercado (cripto/stock en USD)
+    if(prices[symbol]>0) priceUsd=prices[symbol];
+    else if(stockPrices[symbol]) priceUsd=stockPrices[symbol].price;
+    else {showMsg('Enter the purchase price',true);return;}
+    priceCad = priceUsd * usdToCad;
+  }
+
+  if(commCad<0){showMsg('Commission cannot be negative',true);return;}
+  if(commCad>=cadAmount){showMsg('Commission exceeds purchase amount',true);return;}
+
+  const netCad=cadAmount-commCad;
+  const usdAmount=netCad/usdToCad;
+  const units=usdAmount/priceUsd;
+
+  const tx={symbol,type,date,cadAmount,priceUsd,priceCad,units,commissionCad:commCad,account,exchange,notes,id:Date.now()};
+  transactions.push(tx);
+  saveLocal();
+  syncToSheets(tx);
+
+  // Start tracking stock if new equity
+  if(type==='stock'&&!stockPrices[symbol]) fetchStockPrices();
+
+  showMsg(`✓ ${units.toFixed(6)} ${symbol} @ CAD $${priceCad.toFixed(2)} / USD $${priceUsd.toFixed(2)} — Comm: CA$${commCad.toFixed(2)}`,false);
+  document.getElementById('f-cad').value='';
+  document.getElementById('f-comm').value='';
+  document.getElementById('f-notes').value='';
+  document.getElementById('f-price').value='';
+  document.getElementById('f-comm-calc').textContent='Enter amount + commission to see % breakdown';
+  document.getElementById('f-price-conv').style.display='none';
+  renderAll();
+  setTimeout(closeModal,1800);
+}
+
+function delTx(idx){
+  if(!confirm('Delete this transaction? This cannot be undone.'))return;
+  const tx = transactions[idx];
+  transactions.splice(idx,1);
+  saveLocal();
+  if (tx && tx.id) deleteFromSheets(tx.id);
+  renderAll();
+}
+
+function showMsg(txt,isErr){
+  const el=document.getElementById('fmsg');
+  el.textContent=txt;
+  el.className='fmsg '+(isErr?'err':'ok');
+  if(!isErr)setTimeout(clearMsg,2500);
+}
+function clearMsg(){const el=document.getElementById('fmsg');el.className='fmsg';el.textContent='';}
+
+// ── CURRENCY ──
+function toggleCurrency(){currency=currency==='USD'?'CAD':'USD';saveLocal();renderAll();}
+
+// ── CSV EXPORT ──
+function exportCSV(){
+  const txs = filteredTx();
+  if(!txs.length){alert('No transactions to export in current view.');return;}
+  const h=['Date','Account','Holder','IBKR_ID','Symbol','Class','Units','Price_USD','Amount_CAD','Commission_CAD','Commission_Pct','Exchange','Net_Cost_USD','Notes'];
+  const rows=txs.map(tx=>{
+    const cp=tx.cadAmount>0?((tx.commissionCad/tx.cadAmount)*100).toFixed(3):'0';
+    const net=((tx.cadAmount-(tx.commissionCad||0))/usdToCad).toFixed(2);
+    const us=tx.units<1?tx.units.toFixed(8):tx.units.toFixed(6);
+    const meta=ACCOUNTS[tx.account]||{label:'',holder:'',ibkr:''};
+    return [tx.date,meta.label,meta.holder,meta.ibkr||'',tx.symbol,tx.type,us,tx.priceUsd.toFixed(4),tx.cadAmount.toFixed(2),(tx.commissionCad||0).toFixed(2),cp,tx.exchange||'',net,'"'+(tx.notes||'')+'"'].join(',');
+  });
+  const csv=[h.join(','),...rows].join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const suffix = viewMode==='ALL' ? 'all' : viewMode.toLowerCase();
+  a.href=url; a.download='vault-'+suffix+'-'+new Date().toISOString().split('T')[0]+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── INIT ──
+(async function init(){
+  loadLocal();
+  setView(viewMode); // aplica el switch persistido sin re-renderizar dos veces
+  await fetchRate();
+  connectBinance();
+  startStockPolling();
+  loadFromSheets();
+  renderAll();
+})();
+</script>
+</body>
+</html>
