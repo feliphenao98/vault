@@ -211,6 +211,7 @@ tr:hover td{background:rgba(255,255,255,0.018);}
   <div class="tick"><span class="tsym" style="color:var(--eth)">ETH</span><span class="tprice" id="tk-ETH">—</span><span class="tch muted" id="tc-ETH">—</span></div>
   <div class="tick"><span class="tsym" style="color:var(--sol)">SOL</span><span class="tprice" id="tk-SOL">—</span><span class="tch muted" id="tc-SOL">—</span></div>
   <div class="tick" style="margin-left:auto;border-right:none;min-width:auto;gap:16px;">
+    <span class="muted" id="px-status" style="font-size:10px;"></span>
     <span class="muted" style="font-size:10px;">USD/CAD</span>
     <span id="tk-rate">—</span>
     <span class="muted" id="tk-time" style="font-size:11px;">—</span>
@@ -221,8 +222,8 @@ tr:hover td{background:rgba(255,255,255,0.018);}
 <div class="summary">
   <div class="scard"><div class="slabel">Total invested</div><div class="sval" id="s-inv">—</div><div class="ssub" id="s-inv2">—</div></div>
   <div class="scard"><div class="slabel">Current value</div><div class="sval" id="s-val">—</div><div class="ssub" id="s-val2">—</div></div>
-  <div class="scard"><div class="slabel">Total P&L</div><div class="sval" id="s-pnl">—</div><div class="ssub" id="s-pnl2">—</div></div>
-  <div class="scard"><div class="slabel">Commissions paid</div><div class="sval gold" id="s-comm">CA$0.00</div><div class="ssub">Tax record</div></div>
+  <div class="scard"><div class="slabel">Total P&L</div><div class="sval" id="s-pnl">—</div><div class="ssub" id="s-pnl2">—</div><div class="ssub" id="s-pnl-net" style="margin-top:2px;">—</div></div>
+  <div class="scard"><div class="slabel">Commissions paid</div><div class="sval gold" id="s-comm">CA$0.00</div><div class="ssub" id="s-comm-sub">Tracked separately</div></div>
   <div class="scard"><div class="slabel">Transactions</div><div class="sval" id="s-tx">0</div><div class="ssub" id="s-assets">0 assets</div></div>
 </div>
 
@@ -250,7 +251,7 @@ tr:hover td{background:rgba(255,255,255,0.018);}
     <div style="overflow-x:auto;">
       <table>
         <thead><tr>
-          <th>Asset</th><th>Units</th><th>Avg buy USD</th><th>Avg buy CAD</th><th>Current</th><th>Invested</th><th>Value</th><th>Commissions</th><th>P&L</th>
+          <th>Asset</th><th>Units</th><th>Avg buy</th><th>Current</th><th>Deployed</th><th>Value</th><th>Commissions</th><th>P&L gross</th><th>P&L net</th>
         </tr></thead>
         <tbody id="dca-tbody"><tr><td colspan="8"><div class="empty">Add your first purchase to begin tracking</div></td></tr></tbody>
       </table>
@@ -270,7 +271,7 @@ tr:hover td{background:rgba(255,255,255,0.018);}
   <div style="overflow-x:auto;">
     <table>
       <thead><tr>
-        <th>Date</th><th>Account</th><th>Asset</th><th>Class</th><th>Units</th><th>Price USD</th><th>Amount CAD</th><th>Commission</th><th>Comm %</th><th>Exchange</th><th>Net USD</th><th>Notes</th><th></th>
+        <th>Date</th><th>Account</th><th>Asset</th><th>Class</th><th>Units</th><th>Price</th><th>Deployed CAD</th><th>Commission</th><th>Comm %</th><th>Exchange</th><th>Cash out CAD</th><th>Notes</th><th></th>
       </tr></thead>
       <tbody id="tx-tbody"><tr><td colspan="13"><div class="empty">No transactions recorded</div></td></tr></tbody>
     </table>
@@ -312,8 +313,13 @@ tr:hover td{background:rgba(255,255,255,0.018);}
         <label class="flabel">Date</label>
         <input class="finput" id="f-date" type="date">
       </div>
-      <div class="fg">
-        <label class="flabel">Amount paid (CAD)</label>
+      <div class="fg" id="f-uw">
+        <label class="flabel">Shares purchased</label>
+        <input class="finput" id="f-units" type="number" placeholder="2" step="1" min="1" oninput="calcComm()">
+        <div class="fcomm" id="f-units-note">Whole shares — as executed at the broker</div>
+      </div>
+      <div class="fg" id="f-cw2">
+        <label class="flabel" id="f-cad-lbl">Amount paid (CAD)</label>
         <input class="finput" id="f-cad" type="number" placeholder="100.00" step="0.01" min="0" oninput="calcComm()">
       </div>
       <div class="fg">
@@ -377,10 +383,54 @@ let usdToCad   = 1.38;
 let prices     = { BTC:0, ETH:0, SOL:0 };
 let prevPrices = { BTC:0, ETH:0, SOL:0 };
 let stockPrices= {};
+let priceFeed  = { src:null, delayed:false, at:0 };
+let missingPrices = [];
 let transactions = [];
 let allocChart = null;
 let ws = null;
 let stockInterval = null;
+
+// ── REGISTRO DE ACTIVOS ──────────────────────────────────
+// ccy  = moneda nativa de cotización (nunca se convierte para calcular P&L)
+// feed = símbolo que espera Finnhub (TSX requiere sufijo .TO)
+const EQUITY_META = {
+  VEQT:   { ccy:'CAD', feed:'VEQT.TO', name:'Vanguard All-Equity ETF' },
+  CASH:   { ccy:'CAD', feed:'CASH.TO', name:'Global X High Interest Savings' },
+  RY:     { ccy:'CAD', feed:'RY.TO',   name:'Royal Bank of Canada' },
+  XEQT:   { ccy:'CAD', feed:'XEQT.TO', name:'iShares All-Equity ETF' },
+  PLTR:   { ccy:'USD', feed:'PLTR',    name:'Palantir Technologies' },
+  HIMS:   { ccy:'USD', feed:'HIMS',    name:'Hims & Hers Health' },
+  SPCX:   { ccy:'USD', feed:'SPCX',    name:'SpaceX' }
+};
+
+// Moneda nativa de un símbolo. Cripto siempre USD.
+function ccyOf(sym, type){
+  if (type === 'crypto') return 'USD';
+  const m = EQUITY_META[sym];
+  return m ? m.ccy : 'USD';
+}
+function feedOf(sym){
+  const m = EQUITY_META[sym];
+  return m ? m.feed : sym;
+}
+// Precio nativo de una transacción (retrocompatible con filas antiguas)
+function txPriceNative(tx){
+  if (typeof tx.priceNative === 'number' && tx.priceNative > 0) return tx.priceNative;
+  const c = ccyOf(tx.symbol, tx.type);
+  return c === 'CAD' ? (tx.priceCad || 0) : (tx.priceUsd || 0);
+}
+function txCcy(tx){ return tx.nativeCcy || ccyOf(tx.symbol, tx.type); }
+
+// Formato de unidades: entero para equity, decimales para cripto
+function fmtUnits(u, type){
+  if (type === 'crypto') return u < 1 ? u.toFixed(6) : u.toFixed(4);
+  return Number.isInteger(u) ? String(u) : u.toFixed(4);
+}
+function fmtNat(v, ccy, d){
+  d = (d === undefined) ? 2 : d;
+  const p = ccy === 'CAD' ? 'CA$' : '$';
+  return p + v.toLocaleString('en-CA',{minimumFractionDigits:d,maximumFractionDigits:d});
+}
 
 const COLORS  = { BTC:'#f7931a', ETH:'#627eea', SOL:'#9945ff' };
 const PALETTE = ['#00d4aa','#4a9eff','#f5a623','#ff4d6a','#a78bfa','#34d399','#fb923c','#e879f9'];
@@ -507,17 +557,64 @@ function connectBinance() {
 }
 
 // ── FINNHUB STOCK PRICES ──
+// Precios de renta variable.
+//  1) GOOGLEFINANCE vía tu Apps Script — cubre TSX y US, sin API key.
+//  2) Finnhub solo como respaldo para tickers US (su plan gratis no cubre TSX).
 async function fetchStockPrices() {
   const syms = [...new Set(transactions.filter(t => t.type === 'stock').map(t => t.symbol))];
   if (!syms.length) return;
-  for (const sym of syms) {
+  const got = {};
+
+  if (SCRIPT_URL) {
     try {
-      const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${sym}&token=${FINNHUB_KEY}`);
+      const r = await fetch(SCRIPT_URL + '?action=getPrices&symbols=' + encodeURIComponent(syms.join(',')));
       const d = await r.json();
-      if (d.c && d.c > 0) stockPrices[sym] = { price: d.c, change: d.dp || 0 };
+      if (d && d.ok && d.prices) {
+        Object.keys(d.prices).forEach(sym => {
+          const p = d.prices[sym];
+          if (p && p.price > 0) {
+            stockPrices[sym] = { price:p.price, change:p.change||0, live:true, src:'GF', at:Date.now() };
+            got[sym] = true;
+          }
+        });
+        priceFeed = { src:'GOOGLEFINANCE', delayed:true, at:Date.now() };
+      }
+    } catch(e){ /* cae al respaldo */ }
+  }
+
+  for (const sym of syms) {
+    if (got[sym]) continue;
+    if (ccyOf(sym,'stock') === 'CAD') continue;   // Finnhub gratis no cubre TSX
+    try {
+      const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${feedOf(sym)}&token=${FINNHUB_KEY}`);
+      const d = await r.json();
+      if (d.c && d.c > 0) {
+        stockPrices[sym] = { price: d.c, change: d.dp || 0, live:true, src:'FH', at:Date.now() };
+        got[sym] = true;
+      }
     } catch(e){}
   }
+
+  // Marcar como no-live lo que no resolvió, para no mostrar un P&L falso.
+  syms.forEach(sym => { if(!got[sym] && stockPrices[sym]) stockPrices[sym].live = false; });
+
+  missingPrices = syms.filter(sym => !got[sym]);
+  renderPriceStatus();
   renderAll();
+}
+
+// ── ESTADO DEL FEED DE PRECIOS ──
+function renderPriceStatus(){
+  const el = document.getElementById('px-status');
+  if(!el) return;
+  if(!priceFeed.src){ el.textContent = ''; return; }
+  const t = new Date(priceFeed.at).toLocaleTimeString();
+  let txt = `Equities: ${priceFeed.src}`;
+  if(priceFeed.delayed) txt += ' · ~20 min delay';
+  txt += ` · ${t}`;
+  if(missingPrices.length) txt += ` · no quote: ${missingPrices.join(', ')}`;
+  el.textContent = txt;
+  el.style.color = missingPrices.length ? 'var(--gold)' : 'var(--muted)';
 }
 
 function startStockPolling() {
@@ -534,11 +631,20 @@ function setStatus(state, txt) {
   if (dot) dot.className = 'sdot' + (state==='live'?' live':state==='err'?' err':'');
 }
 
+// Devuelve el precio en MONEDA NATIVA del activo.
 function getPrice(sym) {
   if (prices[sym] > 0) return prices[sym];
   if (stockPrices[sym]) return stockPrices[sym].price;
+  // Sin cotización en vivo: se usa el último precio pagado SOLO como marcador.
+  // isLive() avisa a la UI para que no muestre un P&L falso de 0.00%.
   const txs = transactions.filter(t => t.symbol === sym);
-  return txs.length ? txs[txs.length-1].priceUsd : 0;
+  return txs.length ? txPriceNative(txs[txs.length-1]) : 0;
+}
+
+// ¿Hay cotización real de mercado, o estamos usando el último precio pagado?
+function isLive(sym) {
+  if (prices[sym] > 0) return true;
+  return !!(stockPrices[sym] && stockPrices[sym].live);
 }
 
 function getChange(sym) {
@@ -584,27 +690,47 @@ function filteredTx(){
 }
 
 // ── PORTFOLIO CALC ──
+// REGLA: la comisión NUNCA entra en el valor del portafolio ni altera las unidades.
+// Vive en su propio acumulador (commCad) y solo afecta al P&L NETO.
 function calc() {
   const txs = filteredTx();
   const assets={};
   txs.forEach(tx=>{
-    if (!assets[tx.symbol]) assets[tx.symbol]={symbol:tx.symbol,type:tx.type,units:0,costUsd:0,cadInvested:0,commCad:0};
+    const ccy = txCcy(tx);
+    if (!assets[tx.symbol]) assets[tx.symbol]={symbol:tx.symbol,type:tx.type,ccy:ccy,units:0,deployed:0,commCad:0};
     const a=assets[tx.symbol];
-    a.units      +=tx.units;
-    a.costUsd    +=tx.units*tx.priceUsd;
-    a.cadInvested+=tx.cadAmount;
-    a.commCad    +=(tx.commissionCad||0);
+    a.units    += tx.units;
+    a.deployed += tx.units * txPriceNative(tx);   // capital que compró unidades — sin comisión
+    a.commCad  += (tx.commissionCad||0);          // carril separado
   });
   let totalVal=0,totalCost=0,totalComm=0;
   Object.values(assets).forEach(a=>{
-    a.avgPrice=a.units>0?a.costUsd/a.units:0;
-    a.price=getPrice(a.symbol);
-    a.value=a.units*a.price;
-    a.pnl=a.value-a.costUsd;
-    a.pnlPct=a.costUsd>0?(a.pnl/a.costUsd)*100:0;
+    const toUsd = a.ccy==='CAD' ? (1/usdToCad) : 1;
+    a.avgPrice = a.units>0 ? a.deployed/a.units : 0;   // nativa
+    a.price    = getPrice(a.symbol);                   // nativa
+    a.live     = isLive(a.symbol);
+    a.valueNat = a.units*a.price;
+
+    a.pnlNat    = a.valueNat - a.deployed;                                  // bruto, nativo
+    a.pnlPct    = a.deployed>0 ? (a.pnlNat/a.deployed)*100 : 0;
+    a.commNat   = a.ccy==='CAD' ? a.commCad : a.commCad/usdToCad;
+    a.acb       = a.deployed + a.commNat;                                   // costo base fiscal
+    a.pnlNetNat = a.pnlNat - a.commNat;                                     // neto, nativo
+    a.pnlNetPct = a.acb>0 ? (a.pnlNetNat/a.acb)*100 : 0;
+
+    // agregados en USD (base del motor / de fmt())
+    a.costUsd = a.deployed*toUsd;
+    a.value   = a.valueNat*toUsd;
+    a.pnl     = a.value - a.costUsd;
+    a.pnlNet  = a.pnl - a.commCad/usdToCad;
+
     totalVal+=a.value; totalCost+=a.costUsd; totalComm+=a.commCad;
   });
-  return {assets,totalVal,totalCost,totalPnl:totalVal-totalCost,totalComm,totalCommUsd:totalComm/usdToCad};
+  const totalCommUsd = totalComm/usdToCad;
+  return {assets,totalVal,totalCost,
+          totalPnl:totalVal-totalCost,
+          totalPnlNet:totalVal-totalCost-totalCommUsd,
+          totalComm,totalCommUsd};
 }
 
 // ── ACCOUNTS CALC ──
@@ -614,23 +740,30 @@ function calcAccounts(){
   const accs = {};
   txs.forEach(tx=>{
     const key = tx.account || 'UNASSIGNED';
-    if (!accs[key]) accs[key]={key,units:{},costUsd:0,cadInvested:0,commCad:0,txCount:0};
+    if (!accs[key]) accs[key]={key,units:{},costUsd:0,cadDeployed:0,commCad:0,txCount:0};
     const a = accs[key];
-    if (!a.units[tx.symbol]) a.units[tx.symbol]={units:0,costUsd:0,type:tx.type};
-    a.units[tx.symbol].units   += tx.units;
-    a.units[tx.symbol].costUsd += tx.units*tx.priceUsd;
-    a.costUsd     += tx.units*tx.priceUsd;
-    a.cadInvested += tx.cadAmount;
-    a.commCad     += (tx.commissionCad||0);
-    a.txCount     += 1;
+    const ccy = txCcy(tx);
+    const toUsd = ccy==='CAD' ? (1/usdToCad) : 1;
+    if (!a.units[tx.symbol]) a.units[tx.symbol]={units:0,type:tx.type,ccy:ccy};
+    a.units[tx.symbol].units += tx.units;
+    const natAmt = tx.units * txPriceNative(tx);
+    a.costUsd     += natAmt * toUsd;                       // sin comisión
+    a.cadDeployed += ccy==='CAD' ? natAmt : natAmt*usdToCad;
+    a.commCad     += (tx.commissionCad||0);                // carril separado
+    a.txCount += 1;
   });
   Object.values(accs).forEach(a=>{
     a.valueUsd = 0;
     Object.entries(a.units).forEach(([sym,u])=>{
-      a.valueUsd += u.units * getPrice(sym);
+      const toUsd = u.ccy==='CAD' ? (1/usdToCad) : 1;
+      a.valueUsd += u.units * getPrice(sym) * toUsd;
     });
-    a.pnlUsd = a.valueUsd - a.costUsd;
-    a.pnlPct = a.costUsd>0 ? (a.pnlUsd/a.costUsd)*100 : 0;
+    a.pnlUsd    = a.valueUsd - a.costUsd;
+    a.pnlPct    = a.costUsd>0 ? (a.pnlUsd/a.costUsd)*100 : 0;
+    a.pnlNetUsd = a.pnlUsd - a.commCad/usdToCad;
+    a.cadInvested = a.cadDeployed;            // alias usado por renderAccounts
+    a.cadValue    = a.valueUsd * usdToCad;
+    a.cadPnlNet   = a.cadValue - a.cadDeployed - a.commCad;
   });
   return accs;
 }
@@ -677,7 +810,8 @@ function renderAccounts(){
     return `<div class="acccard ${holderCls}">
       <div class="acclabel">${meta.label}</div>
       <div class="accibkr">${meta.ibkr || 'No IBKR ID'} · ${a.txCount} tx</div>
-      <div class="accrow"><span class="acclbl">Invested</span><span>${fmtCAD(a.cadInvested)}</span></div>
+      <div class="accrow"><span class="acclbl">Deployed</span><span>${fmtCAD(a.cadInvested)}</span></div>
+      <div class="accrow"><span class="acclbl">Commissions</span><span class="gold">${fmtCAD(a.commCad)}</span></div>
       <div class="accrow"><span class="acclbl">Current value</span><span>${fmtCAD(a.valueUsd*usdToCad)}</span></div>
       <div class="accrow bold"><span class="acclbl">P&L</span><span style="color:${pnlCol};">${sg}${fmtCAD(a.pnlUsd*usdToCad)} (${sg}${a.pnlPct.toFixed(2)}%)</span></div>
     </div>`;
@@ -717,6 +851,14 @@ function renderSummary(s){
   document.getElementById('s-pnl').innerHTML=`<span style="color:${c}">${s.totalPnl>=0?'+':''}${fmt(s.totalPnl)}</span>`;
   document.getElementById('s-pnl2').innerHTML=`<span style="color:${c}">${fmtPct(pct)}</span>`;
   el('s-comm',fmtCAD(s.totalComm));
+  const drag = s.totalCost>0 ? (s.totalCommUsd/s.totalCost)*100 : 0;
+  const cs = document.getElementById('s-comm-sub');
+  if(cs) cs.textContent = drag>0 ? drag.toFixed(2)+'% of deployed capital' : 'Tracked separately';
+  const netEl = document.getElementById('s-pnl-net');
+  if(netEl){
+    const nc = s.totalPnlNet>=0?'var(--green)':'var(--red)';
+    netEl.innerHTML = `Net of fees: <span style="color:${nc}">${s.totalPnlNet>=0?'+':''}${fmt(s.totalPnlNet)}</span>`;
+  }
   el('s-tx',transactions.length);
   el('s-assets',assets.length+' asset'+(assets.length!==1?'s':''));
   el('tx-count',transactions.length+' entries');
@@ -738,13 +880,13 @@ function renderCards(s){
     const hasH=a&&a.units>0;
     const pstr=price>0?'$'+price.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}):(base.includes(sym)?'Loading...':'Manual');
     const chgHtml=chg!==null?`<span class="${chg>=0?'green':'red'}" style="font-size:11px;">${chg>=0?'+':''}${chg.toFixed(2)}%</span>`:'';
-    const us=a?(a.units<1?a.units.toFixed(6):a.units.toFixed(4)):'';
+    const us=a?fmtUnits(a.units,a.type):'';
     return `<div class="acard ${cls}">
       <div class="csym" style="display:flex;justify-content:space-between;">${sym}${chgHtml}</div>
       <div class="cprice">${pstr}</div>
       ${hasH?`<div class="crow"><span class="clbl">Units</span><span>${us}</span></div>
       <div class="crow"><span class="clbl">Value</span><span>${fmt(a.value)}</span></div>
-      <div>${a.price>0?badge(a.pnl,a.pnlPct):'<span class="pbadge n">—</span>'}</div>`
+      <div>${a.price>0&&a.live?badge(a.pnl,a.pnlPct):'<span class="pbadge n" title="No live quote — P&L unavailable">no live price</span>'}</div>`
       :`<div class="crow"><span class="clbl" style="color:var(--faint)">Not in portfolio</span></div>`}
     </div>`;
   }).join('');
@@ -757,18 +899,20 @@ function renderDCA(s){
   tbody.innerHTML=assets.map((a,i)=>{
     const c=a.pnlPct>=0?'green':'red';
     const sg=a.pnlPct>=0?'+':'';
-    const us=a.units<1?a.units.toFixed(6):a.units.toFixed(4);
-    const hasP=a.price>0;
-    const avgCad=a.avgPrice*usdToCad;
+    const us=fmtUnits(a.units,a.type);
+    const hasP=a.price>0&&a.live;
+    const cn=a.pnlNetPct>=0?'green':'red';
+    const sn=a.pnlNetPct>=0?'+':'';
     return `<tr>
       <td><span class="apill"><span class="adott" style="background:${colorFor(a.symbol,i)}"></span>${a.symbol}</span></td>
-      <td>${us}</td><td>${fmtUSD(a.avgPrice)}</td>
-      <td class="muted">${fmtCAD(avgCad)}</td>
-      <td>${hasP?fmtUSD(a.price):'<span class="muted">—</span>'}</td>
-      <td>${fmt(a.costUsd)}</td>
-      <td>${hasP?fmt(a.value):'<span class="muted">—</span>'}</td>
+      <td>${us}</td>
+      <td>${fmtNat(a.avgPrice,a.ccy,4)}</td>
+      <td>${hasP?fmtNat(a.price,a.ccy):'<span class="muted">stale</span>'}</td>
+      <td>${fmtNat(a.deployed,a.ccy)}</td>
+      <td>${hasP?fmtNat(a.valueNat,a.ccy):'<span class="muted">—</span>'}</td>
       <td class="gold">${fmtCAD(a.commCad)}</td>
-      <td>${hasP?`<span class="${c}">${sg}${fmt(a.pnl)}<br><small>${sg}${a.pnlPct.toFixed(2)}%</small></span>`:'<span class="muted">—</span>'}</td>
+      <td>${hasP?`<span class="${c}">${sg}${fmtNat(a.pnlNat,a.ccy)}<br><small>${sg}${a.pnlPct.toFixed(2)}%</small></span>`:'<span class="muted">—</span>'}</td>
+      <td>${hasP?`<span class="${cn}">${sn}${fmtNat(a.pnlNetNat,a.ccy)}<br><small>${sn}${a.pnlNetPct.toFixed(2)}%</small></span>`:'<span class="muted">—</span>'}</td>
     </tr>`;
   }).join('');
 }
@@ -822,9 +966,10 @@ function renderTx(){
   // mapeo de cada tx visible al idx real para borrado correcto
   const indexed = txs.map(tx => ({tx, idx: transactions.indexOf(tx)}));
   tbody.innerHTML=[...indexed].reverse().map(({tx,idx})=>{
-    const us=tx.units<1?tx.units.toFixed(6):tx.units.toFixed(4);
-    const cp=tx.cadAmount>0?((tx.commissionCad/tx.cadAmount)*100).toFixed(3):'0.000';
-    const netUsd=((tx.cadAmount-(tx.commissionCad||0))/usdToCad).toFixed(2);
+    const us=fmtUnits(tx.units,tx.type);
+    const cp=tx.cadAmount>0?(((tx.commissionCad||0)/tx.cadAmount)*100).toFixed(3):'0.000';
+    const cashOut=(tx.cadAmount+(tx.commissionCad||0));
+    const pNat=txPriceNative(tx), cNat=txCcy(tx);
     const accMeta = ACCOUNTS[tx.account];
     const accLabel = accMeta ? accMeta.short : '<span class="muted">—</span>';
     const accCls = accMeta ? accMeta.holder.toLowerCase() : '';
@@ -835,12 +980,12 @@ function renderTx(){
       <td><strong>${tx.symbol}</strong></td>
       <td class="muted">${tx.type==='crypto'?'Crypto':'Equity'}</td>
       <td>${us}</td>
-      <td>${fmtUSD(tx.priceUsd)}</td>
+      <td>${fmtNat(pNat,cNat,4)}</td>
       <td>${fmtCAD(tx.cadAmount)}</td>
       <td class="gold">${fmtCAD(tx.commissionCad||0)}</td>
       <td class="gold">${cp}%</td>
       <td class="muted">${tx.exchange||'—'}</td>
-      <td>${fmtUSD(parseFloat(netUsd))}</td>
+      <td>${fmtCAD(cashOut)}</td>
       <td class="muted" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;">${tx.notes||'—'}</td>
       <td><button class="btn-d" onclick="delTx(${idx})" title="Delete">✕</button></td>
     </tr>`;
@@ -860,17 +1005,27 @@ function closeOut(e){if(e.target===document.getElementById('overlay'))closeModal
 function handleType(){
   const type=document.getElementById('f-type').value;
   const sel=document.getElementById('f-asset');
-  if(type==='crypto'){
+  const isCrypto = type==='crypto';
+  if(isCrypto){
     sel.innerHTML='<option value="BTC">Bitcoin (BTC)</option><option value="ETH">Ethereum (ETH)</option><option value="SOL">Solana (SOL)</option><option value="custom">Other crypto...</option>';
   } else {
-    sel.innerHTML='<option value="TSLA">Tesla (TSLA)</option><option value="PLTR">Palantir (PLTR)</option><option value="NVDA">NVIDIA (NVDA)</option><option value="MSFT">Microsoft (MSFT)</option><option value="AAPL">Apple (AAPL)</option><option value="custom">Other...</option>';
+    sel.innerHTML='<option value="VEQT">Vanguard All-Equity (VEQT.TO)</option><option value="CASH">Global X HISA (CASH.TO)</option><option value="RY">Royal Bank (RY.TO)</option><option value="PLTR">Palantir (PLTR)</option><option value="HIMS">Hims &amp; Hers (HIMS)</option><option value="SPCX">SpaceX (SPCX)</option><option value="custom">Other...</option>';
   }
+  // Equity: se ingresan unidades. Cripto: se ingresa monto.
+  document.getElementById('f-uw').style.display  = isCrypto ? 'none' : 'flex';
+  document.getElementById('f-cw2').style.display = isCrypto ? 'flex' : 'none';
   onAsset();
 }
 
 function onAsset(){
   const val=document.getElementById('f-asset').value;
+  const type=document.getElementById('f-type').value;
   document.getElementById('f-cw').style.display=val==='custom'?'flex':'none';
+  // Fija la moneda de captura del precio a la moneda nativa del activo.
+  if(val!=='custom'){
+    const want=ccyOf(val,type);
+    if(priceCur!==want) togglePriceCur();
+  }
   const pi=document.getElementById('f-price');
   if(val!=='custom'&&prices[val]>0){pi.value=prices[val].toFixed(2);}
   else if(val!=='custom'&&stockPrices[val]){pi.value=stockPrices[val].price.toFixed(2);}
@@ -903,15 +1058,29 @@ function calcPriceConv(){
 }
 
 function calcComm(){
-  const cad=parseFloat(document.getElementById('f-cad').value)||0;
+  const type=document.getElementById('f-type').value;
   const comm=parseFloat(document.getElementById('f-comm').value)||0;
   const el=document.getElementById('f-comm-calc');
-  if(cad>0&&comm>=0){
-    const pct=((comm/cad)*100).toFixed(3);
-    const net=(cad-comm).toFixed(2);
-    el.innerHTML=`Commission: <span>${pct}%</span> of purchase — Net invested: <span>CA$${net}</span>`;
+  let base=0;
+  if(type==='crypto'){
+    base=parseFloat(document.getElementById('f-cad').value)||0;
   } else {
-    el.textContent='Enter amount + commission to see % breakdown';
+    const u=parseFloat(document.getElementById('f-units').value)||0;
+    const p=parseFloat(document.getElementById('f-price').value)||0;
+    const sym=document.getElementById('f-asset').value;
+    const nat=u*p;
+    base = ccyOf(sym,type)==='CAD' ? nat : nat*usdToCad;
+  }
+  if(base>0&&comm>=0){
+    const pct=((comm/base)*100).toFixed(3);
+    if(type==='crypto'){
+      el.innerHTML=`Commission: <span>${pct}%</span> — deducted from the amount (fractional units)`;
+    } else {
+      el.innerHTML=`Deployed <span>CA$${base.toFixed(2)}</span> + commission <span>CA$${comm.toFixed(2)}</span> = cash out <span>CA$${(base+comm).toFixed(2)}</span> · friction <span>${pct}%</span>`;
+    }
+  } else {
+    el.textContent = type==='crypto' ? 'Enter amount + commission to see % breakdown'
+                                     : 'Enter shares + price + commission to see the breakdown';
   }
 }
 
@@ -952,13 +1121,31 @@ async function addPurchase(){
   }
 
   if(commCad<0){showMsg('Commission cannot be negative',true);return;}
-  if(commCad>=cadAmount){showMsg('Commission exceeds purchase amount',true);return;}
 
-  const netCad=cadAmount-commCad;
-  const usdAmount=netCad/usdToCad;
-  const units=usdAmount/priceUsd;
+  const nativeCcy = ccyOf(symbol, type);
+  const priceNative = nativeCcy==='CAD' ? priceCad : priceUsd;
 
-  const tx={symbol,type,date,cadAmount,priceUsd,priceCad,units,commissionCad:commCad,account,exchange,notes,id:Date.now()};
+  let units, deployedNative;
+  if(type==='crypto'){
+    // Cripto: fraccionable. La comisión se descuenta del monto — así funciona el exchange.
+    if(commCad>=cadAmount){showMsg('Commission exceeds purchase amount',true);return;}
+    units = ((cadAmount-commCad)/usdToCad)/priceUsd;
+    deployedNative = units*priceUsd;
+  } else {
+    // Equity: unidades enteras ingresadas directo. La comisión se suma por encima, no se resta.
+    units = parseFloat(document.getElementById('f-units').value);
+    if(!units||units<=0){showMsg('Enter the number of shares purchased',true);return;}
+    if(!Number.isInteger(units)){showMsg('Shares must be a whole number',true);return;}
+    deployedNative = units*priceNative;
+  }
+
+  // cadAmount = capital desplegado en CAD (sin comisión). La salida de caja es cadAmount + commCad.
+  const deployedCad = nativeCcy==='CAD' ? deployedNative : deployedNative*usdToCad;
+
+  const tx={symbol,type,date,
+            cadAmount:deployedCad,
+            nativeCcy,priceNative,priceUsd,priceCad,units,
+            commissionCad:commCad,account,exchange,notes,id:Date.now()};
   transactions.push(tx);
   saveLocal();
   syncToSheets(tx);
@@ -966,8 +1153,9 @@ async function addPurchase(){
   // Start tracking stock if new equity
   if(type==='stock'&&!stockPrices[symbol]) fetchStockPrices();
 
-  showMsg(`✓ ${units.toFixed(6)} ${symbol} @ CAD $${priceCad.toFixed(2)} / USD $${priceUsd.toFixed(2)} — Comm: CA$${commCad.toFixed(2)}`,false);
+  showMsg(`✓ ${fmtUnits(units,type)} ${symbol} @ ${fmtNat(priceNative,nativeCcy)} — Deployed ${fmtNat(deployedNative,nativeCcy)} + Comm CA$${commCad.toFixed(2)}`,false);
   document.getElementById('f-cad').value='';
+  document.getElementById('f-units').value='';
   document.getElementById('f-comm').value='';
   document.getElementById('f-notes').value='';
   document.getElementById('f-price').value='';
