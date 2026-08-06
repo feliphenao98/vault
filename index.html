@@ -1099,8 +1099,15 @@ async function addPurchase(){
 
   if(!symbol){showMsg('Enter an asset symbol',true);return;}
   if(!date){showMsg('Select a date',true);return;}
-  if(!cadAmount||cadAmount<=0){showMsg('Enter a valid CAD amount',true);return;}
   if(!account){showMsg('Select an account',true);return;}
+  // El monto en CAD solo se ingresa para cripto. En equity se calcula
+  // como unidades x precio, así que ese campo está oculto y vacío.
+  if(type==='crypto' && (!cadAmount||cadAmount<=0)){
+    showMsg('Enter a valid CAD amount',true);return;
+  }
+  if(type!=='crypto' && (!priceInput||priceInput<=0)){
+    showMsg('Enter the purchase price',true);return;
+  }
 
   // Convertir el precio a USD si fue ingresado en CAD (el motor trabaja en USD)
   let priceUsd, priceCad;
